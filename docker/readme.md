@@ -66,6 +66,11 @@ docker logs 04e52ff9270f5810eefe1f77222852dc1461c22440d4ecd6228b5c38f09d838e
 # View the logs of a Docker container with a given container ID or name
 docker logs c2ba
 
+# Follow the log output
+docker logs -f "several starting characters of container"
+
+# Instead of container ID as the input of the commands, we can easily used the substrings of the ID (from starting point). It works until the substring represents a unique ID
+
 # List Docker images
 docker images
 
@@ -82,6 +87,7 @@ docker container stop f708b7ee1a8b
 docker run -d -p 5001:8080 in28min/hello-world-rest-api:0.0.1.RELEASE
 
 # Pull a Docker image from a registry
+# Use this method to make sure using an official image
 docker pull mysql
 
 # Search for Docker images in a registry
@@ -93,7 +99,7 @@ docker image history in28min/hello-world-java:0.0.1.RELEASE
 # Show the history of a Docker image with a given image ID
 docker image history 100229ba687e
 
-# Inspect a Docker image
+# Inspect a Docker image (mre details)
 docker image inspect 100229ba687e
 
 # Remove a Docker image
@@ -115,7 +121,12 @@ docker container pause 832
 docker container unpause 832
 
 # Stop a running container with a given container ID or name
+# Stop also removes to memory associated with the container but 
+# pause does not do that
 docker container stop 832
+
+# The difference between kill and stop is that stop allows safe termination but kill with immediately kill the application 
+docker container kill 832
 
 # Inspect a Docker container with a given container ID or name
 docker container inspect ff521fa58db3
@@ -132,7 +143,7 @@ docker system df
 # Show detailed Docker system information
 docker system info
 
-# Remove all unused Docker resources
+# Remove all unused Docker resources (all the images that have no container associated with them)
 docker system prune -a
 
 # Display the top resource-consuming processes of a Docker container with a given container ID or name
@@ -147,7 +158,7 @@ docker container run -p 5000:5000 -d -m 512m in28min/hello-world-java:0.0.1.RELE
 # Run a Docker container with a Java hello world application, limited to 512MB memory and CPU quota of 50%
 docker container run -p 5000:5000 -d -m 512m --cpu-quota=50000 in28min/hello-world-java:0.0.1.RELEASE
 
-# Show Docker system events
+# Show Docker system events. Should run it in another terminal and then doing your work with docker ... it would log the events on the screen
 docker system events
 
 
@@ -165,7 +176,8 @@ docker stats 42f170966ce613d2a16d7404495af7b3295e01aeb9142e1fa1762bbdc581f502
 # Change directory to the Python hello world project
 cd /in28Minutes/git/devops-master-class/projects/hello-world/hello-world-python
 
-# Build a Docker image with a given tag
+# Build a Docker image with a given tag. The dot at the ens is so important
+# docker build --tag name:tag .
 docker build -t in28min/hello-world-python:0.0.2.RELEASE .
 
 # Run a Docker container with a Python hello world application, mapped to port 5000
@@ -175,6 +187,8 @@ docker run -p 5000:5000 -d in28min/hello-world-python:0.0.2.RELEASE
 docker history e66dc383f7a0
 
 # Push a Docker image to a registry
+# Before that, we need to make docker account and use docker login
+# In the next command, in28min is the docker ID(used for login) and hello world is repo name
 docker push in28min/hello-world-python:0.0.2.RELEASE
 
 
@@ -193,6 +207,7 @@ docker container run -d -p 5000:5000 in28min/hello-world-nodejs:0.0.2.RELEASE
 docker push in28min/hello-world-nodejs:0.0.2.RELEASE
 
 # Change directory to the Java hello world project
+# For java, we have two stage dockerfile. The first stage creates the jar file and the second one execute it
 cd ../hello-world-java/
 
 # Build a Docker image with a given tag
@@ -204,12 +219,42 @@ docker run -d -p 5000:5000 in28min/hello-world-java:0.0.2.RELEASE
 # Push a Docker image to a registry
 docker push in28min/hello-world-java:0.0.2.RELEASE
 
+# To make the code faster and use the caching, we use COPY command in different section. 
+# That's because usually the code changes not the dependencies, so we let everything be built
+# by cache and after that, since the code has changed, we do that step in a different layer. 
+# The problem is the build process continue using cache till it reaches to a point that something 
+# has changed and from that point afterward, it does not use cache. (building efficient docker image)
+# For example, for hello world nodejs project, we change it from(only copy the dependencies in first layer):
+FROM node:8.16.1-alpine
+WORKDIR /app
+COPY . /app
+RUN npm install
+EXPOSE 5000
+CMD node index.js
+
+#ENTRYPOINT ["node", "index.js"]
+#COPY package.json /app
+To
+FROM node:8.16.1-alpine
+WORKDIR /app
+COPY packages.json /app
+RUN npm install
+EXPOSE 5000
+COPY . /app
+CMD node index.js
 
 
 
+# The other important difference between CMD and entry point: 
+# The CMD can be easily overwritten by command line argument but the entry point cannot 
+# be overwritten by command line argument. Test it using below commands:
 # Run a Docker container with a Node.js hello world application, mapped to port 5001 and ping google.com
 docker run -d -p 5001:5000 in28min/hello-world-nodejs:0.0.3.RELEASE ping google.com
-
+# This would run the ping command rather than starting the web server, but in the case of 
+# entrypoint, ping is not executed and the website would be started 
+docker run -d -p 5001:5000 in28min/hello-world-java:0.0.3.RELEASE ping google.com
+# To overwrite and entrypoint, we use --entrypoint option, but overwriting the entry point is much
+# more complex 
 
 
 
@@ -218,7 +263,8 @@ docker run -d -p 8000:8000 --name=currency-exchange in28min/currency-exchange:0.
 
 # Run a Docker container with a currency conversion service
 docker run -d -p 8100:8100 --name=currency-conversion in28min/currency-conversion:0.0.1-RELEASE
-
+# Just running the above line does not make the currency conversion able to access currency exchange. 
+# we need to create new network for these two microservices to connect them
 
 
 
@@ -230,12 +276,11 @@ docker network inspect bridge
 
 
 
-
 # Run a Docker container with a currency conversion service, linked to the currency exchange service and environment variable set
 docker run -d -p 8100:8100 --env CURRENCY_EXCHANGE_SERVICE_HOST=http://currency-exchange --name=currency-conversion --link currency-exchange in28min/currency-conversion:0.0.1-RELEASE
 
-
-
+###############################################
+# USing custom network to connect microservices
 
 # Create a Docker network with a given network name
 docker network create currency-network
@@ -254,7 +299,8 @@ docker run -d -p 8100:8100 --env CURRENCY_EXCHANGE_SERVICE_HOST=http://currency-
 
 
 
-
+# Use this method to make the long command for
+# microservices shorter 
 # Check the version of Docker Compose installed
 docker-compose --version
 
@@ -296,6 +342,11 @@ docker-compose ps
 
 # Display the top resource-consuming processes of the services defined in the Docker Compose file
 docker-compose top
+
+# Like docker system events
+docker-compose events
+
+# Many docker-compose files are similar to docker commands like stop, start, rm etc
 
 
 ```

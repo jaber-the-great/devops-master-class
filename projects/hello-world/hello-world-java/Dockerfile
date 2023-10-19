@@ -9,3 +9,7 @@ FROM openjdk:8-jdk-alpine
 EXPOSE 5000
 COPY --from=stage1 /home/app/target/hello-world-java.jar hello-world-java.jar
 ENTRYPOINT ["sh", "-c", "java -jar /hello-world-java.jar"]
+
+# The scond copy performs copying from stage1 into stage 2 image
+# In one stage docker files, we use CMD command but here
+# we use ENTRYPOINT
